@@ -134,8 +134,6 @@ clusterer = InputClusterer();
 def add_addresses_output_mappings():
 	start = time.time()
 
-
-
 	procs = [];
 	for file in files:
 		p = Process(target=clusterer.add_addresses_to_db, args=(file,))
