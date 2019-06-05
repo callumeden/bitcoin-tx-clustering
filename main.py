@@ -33,13 +33,14 @@ class InputClusterer:
 
 	def group_addresses(self, input_file):
 
-		with open(input_file, 'r') as fp:
-			csv_reader = csv.reader(fp)
-			mongo_locked_to_data = db.locked_to
-			collection_tx_to_address = db.tx_to_address
-			collection_address_to_txs = db.address_to_txs
+		mongo_locked_to_data = db.locked_to
+		collection_tx_to_address = db.tx_to_address
+		collection_address_to_txs = db.address_to_txs
 
-			for relation in csv_reader:
+		for chunk in pandas.read_csv(input_file, iterator=True, chunksize=500):
+
+			for row in enumerate(chunk.values):
+				relation = row[1]
 				output_id = relation[0]
 				txid = relation[1]
 
@@ -71,43 +72,48 @@ class InputClusterer:
 					updated_fields = { "$addToSet": { "txids": txid } }
 					collection_address_to_txs.update_one({"_id": address_to_txids["_id"]}, updated_fields)
 
-	def generate_linked_address_collection(self, address_file):
+	def generate_linked_address_collection_for_chunk(self, address_chunk):
+		client = MongoClient('localhost', 27017)
+		db = client.pymongo_inputClustering
+		mongo_locked_to_data = db.locked_to
+		collection_tx_to_address = db.tx_to_address
+		collection_address_to_txs = db.address_to_txs
+		address_mappings = db.linked_addresses
 
-		with open(address_file, 'r') as fp:
-			csv_reader = csv.reader(fp)
-			mongo_locked_to_data = db.locked_to
-			collection_tx_to_address = db.tx_to_address
-			collection_address_to_txs = db.address_to_txs
-			address_mappings = db.linked_addresses
+		for row in enumerate(address_chunk.values):
+			address_entry = row[1]
+			address = address_entry[0]
+			first_insert = True
+			txs_that_address_inputs_doc = collection_address_to_txs.find_one({'address': address})
+			if txs_that_address_inputs_doc is None:
+				continue
 
-			for address_entry in csv_reader:
-				address = address_entry[0]
-				first_insert = True
-				txs_that_address_inputs_doc = collection_address_to_txs.find_one({'address': address})
-				if txs_that_address_inputs_doc is None:
+			txs_that_address_inputs = txs_that_address_inputs_doc['txids']
+
+			for txid in txs_that_address_inputs:
+
+				addresses_to_link_doc = collection_tx_to_address.find_one({'txid': txid})
+				if addresses_to_link_doc is None:
 					continue
 
-				txs_that_address_inputs = txs_that_address_inputs_doc['txids']
+				addresses_to_link = set(addresses_to_link_doc['addresses'])
 
-				for txid in txs_that_address_inputs:
+				if first_insert:
+					if address in addresses_to_link:
+						addresses_to_link.remove(address)
 
-					addresses_to_link_doc = collection_tx_to_address.find_one({'txid': txid})
-					if addresses_to_link_doc is None:
-						continue
+					if len(addresses_to_link) > 0:
+						address_mappings.insert_one({'address': address, 'linked_addresses': list(addresses_to_link)})
+						first_insert = False
 
-					addresses_to_link = set(addresses_to_link_doc['addresses'])
+				else:
+					updated_addresses = { "$addToSet": { "linked_addresses": list(addresses_to_link) } }
+					address_mappings.update_one({'address': address}, updated_addresses)
 
-					if first_insert:
-						if address in addresses_to_link:
-							addresses_to_link.remove(address)
-
-						if len(addresses_to_link) > 0:
-							address_mappings.insert_one({'address': address, 'linked_addresses': list(addresses_to_link)})
-							first_insert = False
-
-					else:
-						updated_addresses = { "$addToSet": { "linked_addresses": list(addresses_to_link) } }
-						address_mappings.update_one({'address': address}, updated_addresses)
+	def generate_linked_address_collection(self, address_file):
+		process_pool = Pool(16)
+		chunk_iterable = pandas.read_csv(address_file, iterator=True, chunksize=500)
+		process_pool.map(self.generate_linked_address_collection_for_chunk, chunk_iterable)
 
 	def generate_linked_address_csv(self):
 
@@ -127,7 +133,6 @@ db = client.pymongo_inputClustering
 relation_path = input("Enter relation directory path....")
 regex = relation_path + "relations/bitcoin-csv-block-*/relation-locked-to-*.csv"
 files = glob.glob(regex)
-process_pool = Pool(8)
 
 print('******************* found files matching regex to be {} **************************'.format(files))
 
@@ -150,20 +155,25 @@ def add_addresses_output_mappings():
 	print('time elapsed: {}'.format(end - start))
 
 def add_grouped_address_data():
-
+	start = time.time()
 	input_regex = relation_path + "relations/bitcoin-csv-block-*/relation-inputs-*.csv"
 	input_files = glob.glob(input_regex)
 
 	for input_file in input_files:
 		clusterer.group_addresses(input_file)
 
+	end = time.time()
 	print('*********** populated mongo db with clustered address data *****************')
+	print('time elapsed: {}'.format(end - start))
 
 def add_linked_address_result():
+	start = time.time()
 	address_file_regex = relation_path + "data/sample-address-data-unique.csv"
 	clusterer.generate_linked_address_collection(address_file_regex)
 
+	end = time.time()
 	print('*********** populated mongo db with linked address data *****************')
+	print('time elapsed: {}'.format(end - start))
 
 def generate_csv():
 
