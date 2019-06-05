@@ -18,16 +18,28 @@ class InputClusterer:
 			csv_reader = csv.reader(fp)
 			locked_to = db.locked_to
 
-			batched_inserts = [];
+			pending_inserts = [];
+			batch_max_size = 1000
+			batch_size = 0
+
 			for relation in csv_reader:
 
 				output_id = relation[0]
 				address = relation[1]
 
 				mongo_data = {"address" : address, "output": output_id}
-				batched_inserts.append(mongo_data)
 
-			locked_to.insert_many(batched_inserts)
+				if batch_size < batch_max_size:
+					pending_inserts.append(mongo_data)
+					batch_size += 1
+				else:
+					locked_to.insert_many(pending_inserts)
+					batch_size = 0
+					pending_inserts = []
+
+			if len(pending_inserts) > 0:
+				locked_to.insert_many(pending_inserts)
+				pending_inserts = []
 
 	def group_addresses(self, input_file):
 
