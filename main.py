@@ -14,9 +14,11 @@ class InputClusterer:
 	def add_addresses_to_db(self, file):
 		client = MongoClient('localhost', 27017)
 		db = client.pymongo_inputClustering
+		locked_to = db.locked_to
 
 		for chunk in pandas.read_csv(file, iterator=True, chunksize=1000):
 
+			pending_inserts = []
 			for row in enumerate(chunk.values):
 				row_data = row[1]
 
@@ -24,19 +26,9 @@ class InputClusterer:
 				address = row_data[1]
 
 				mongo_data = {"address" : address, "output": output_id}
-				if batch_size < batch_max_size:
-					pending_inserts.append(mongo_data)
-					batch_size += 1
-				else:
-					locked_to.insert_many(pending_inserts)
-					print("flushing insert")
-					batch_size = 0
-					pending_inserts = []
+				pending_inserts.append(mongo_data)
 
-			if len(pending_inserts) > 0:
-				locked_to.insert_many(pending_inserts)
-				pending_inserts = []
-				print("final flush of insert")
+			locked_to.insert_many(pending_inserts)
 
 	def group_addresses(self, input_file):
 
