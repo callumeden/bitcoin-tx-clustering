@@ -16,7 +16,7 @@ class InputClusterer:
 		db = client.pymongo_inputClustering
 		locked_to = db.locked_to
 
-		for chunk in pandas.read_csv(file, iterator=True, chunksize=1000):
+		for chunk in pandas.read_csv(file, iterator=True, chunksize=500):
 
 			pending_inserts = []
 			for row in enumerate(chunk.values):
@@ -29,6 +29,7 @@ class InputClusterer:
 				pending_inserts.append(mongo_data)
 
 			locked_to.insert_many(pending_inserts)
+			print('bulk insert')
 
 	def group_addresses(self, input_file):
 
