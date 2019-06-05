@@ -123,21 +123,21 @@ print('******************* found files matching regex to be {} *****************
 
 clusterer = InputClusterer();
 
-# for file in files:
-# 	clusterer.add_addresses_to_db(file)
+for file in files:
+	clusterer.add_addresses_to_db(file)
 
 print('*********** populated mongo db with address->output mappings *****************')
 
 input_regex = relation_path + "relations/bitcoin-csv-block-*/relation-inputs-*.csv"
 input_files = glob.glob(input_regex)
 
-# for input_file in input_files:
-# 	clusterer.group_addresses(input_file)
+for input_file in input_files:
+	clusterer.group_addresses(input_file)
 
 print('*********** populated mongo db with clustered address data *****************')
 
 address_file_regex = relation_path + "data/sample-address-data-unique.csv"
-# clusterer.generate_linked_address_collection(address_file_regex)
+clusterer.generate_linked_address_collection(address_file_regex)
 
 print('*********** populated mongo db with linked address data *****************')
 
