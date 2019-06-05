@@ -1,6 +1,9 @@
 from pymongo import MongoClient
 import glob
 import csv
+from multiprocessing import Pool
+from multiprocessing import Process
+import time
 
 class InputClusterer:
 
@@ -8,6 +11,9 @@ class InputClusterer:
 		pass
 
 	def add_addresses_to_db(self, file):
+		client = MongoClient('localhost', 27017)
+		db = client.pymongo_inputClustering
+
 		with open(file, 'r') as fp:
 			csv_reader = csv.reader(fp)
 			locked_to = db.locked_to
@@ -113,35 +119,54 @@ class InputClusterer:
 
 					csv_writer.writerow([source_address, address_to_link, 'INPUT_LINKED'])
 
+
 client = MongoClient('localhost', 27017)
 db = client.pymongo_inputClustering
 relation_path = input("Enter relation directory path....")
 regex = relation_path + "relations/bitcoin-csv-block-*/relation-locked-to-*.csv"
 files = glob.glob(regex)
+process_pool = Pool(8)
 
 print('******************* found files matching regex to be {} **************************'.format(files))
 
 clusterer = InputClusterer();
 
-for file in files:
-	clusterer.add_addresses_to_db(file)
+def add_addresses_output_mappings():
+	start = time.time()
 
-print('*********** populated mongo db with address->output mappings *****************')
 
-input_regex = relation_path + "relations/bitcoin-csv-block-*/relation-inputs-*.csv"
-input_files = glob.glob(input_regex)
 
-for input_file in input_files:
-	clusterer.group_addresses(input_file)
+	procs = [];
+	for file in files:
+		p = Process(target=clusterer.add_addresses_to_db, args=(file,))
+		procs.append(p)
+		p.start()
 
-print('*********** populated mongo db with clustered address data *****************')
+	for proc in procs:
+		proc.join()
 
-address_file_regex = relation_path + "data/sample-address-data-unique.csv"
-clusterer.generate_linked_address_collection(address_file_regex)
+	end = time.time()
+	print('*********** populated mongo db with address->output mappings *****************')
+	print('time elapsed: {}'.format(end - start))
 
-print('*********** populated mongo db with linked address data *****************')
+def add_grouped_address_data():
 
-clusterer.generate_linked_address_csv()
+	input_regex = relation_path + "relations/bitcoin-csv-block-*/relation-inputs-*.csv"
+	input_files = glob.glob(input_regex)
 
-print('************** csv generation complete *************************')
+	for input_file in input_files:
+		clusterer.group_addresses(input_file)
+
+	print('*********** populated mongo db with clustered address data *****************')
+
+def add_linked_address_result():
+	address_file_regex = relation_path + "data/sample-address-data-unique.csv"
+	clusterer.generate_linked_address_collection(address_file_regex)
+
+	print('*********** populated mongo db with linked address data *****************')
+
+def generate_csv():
+
+	clusterer.generate_linked_address_csv()
+	print('************** csv generation complete *************************')
 
