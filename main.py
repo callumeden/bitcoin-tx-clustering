@@ -4,6 +4,7 @@ import csv
 from multiprocessing import Pool
 from multiprocessing import Process
 import time
+import pandas
 
 class InputClusterer:
 
@@ -14,32 +15,28 @@ class InputClusterer:
 		client = MongoClient('localhost', 27017)
 		db = client.pymongo_inputClustering
 
-		with open(file, 'r') as fp:
-			csv_reader = csv.reader(fp)
-			locked_to = db.locked_to
+		for chunk in pandas.read_csv(file, iterator=True, chunksize=1000):
 
-			pending_inserts = [];
-			batch_max_size = 1000
-			batch_size = 0
+			for row in enumerate(chunk.values):
+				row_data = row[1]
 
-			for relation in csv_reader:
-
-				output_id = relation[0]
-				address = relation[1]
+				output_id = row_data[0]
+				address = row_data[1]
 
 				mongo_data = {"address" : address, "output": output_id}
-
 				if batch_size < batch_max_size:
 					pending_inserts.append(mongo_data)
 					batch_size += 1
 				else:
 					locked_to.insert_many(pending_inserts)
+					print("flushing insert")
 					batch_size = 0
 					pending_inserts = []
 
 			if len(pending_inserts) > 0:
 				locked_to.insert_many(pending_inserts)
 				pending_inserts = []
+				print("final flush of insert")
 
 	def group_addresses(self, input_file):
 
