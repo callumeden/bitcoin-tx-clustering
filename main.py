@@ -32,7 +32,8 @@ class InputClusterer:
 			print('bulk insert')
 
 	def group_addresses(self, input_file):
-
+		client = MongoClient('localhost', 27017)
+		db = client.pymongo_inputClustering
 		mongo_locked_to_data = db.locked_to
 		collection_tx_to_address = db.tx_to_address
 		collection_address_to_txs = db.address_to_txs
@@ -159,8 +160,8 @@ def add_grouped_address_data():
 	input_regex = relation_path + "relations/bitcoin-csv-block-*/relation-inputs-*.csv"
 	input_files = glob.glob(input_regex)
 
-	for input_file in input_files:
-		clusterer.group_addresses(input_file)
+	process_pool = Pool(16)
+	process_pool.map(clusterer.group_addresses, input_files)
 
 	end = time.time()
 	print('*********** populated mongo db with clustered address data *****************')
