@@ -39,7 +39,7 @@ class InputClusterer:
 		collection_address_to_txs = db.address_to_txs
 
 		for chunk in pandas.read_csv(input_file, iterator=True, chunksize=500):
-
+			print('reading chunk...')
 			for row in enumerate(chunk.values):
 				relation = row[1]
 				output_id = relation[0]
@@ -80,7 +80,7 @@ class InputClusterer:
 		collection_tx_to_address = db.tx_to_address
 		collection_address_to_txs = db.address_to_txs
 		address_mappings = db.linked_addresses
-
+		print('reading chunk')
 		for row in enumerate(address_chunk.values):
 			address_entry = row[1]
 			address = address_entry[0]
