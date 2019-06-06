@@ -99,14 +99,15 @@ class InputClusterer:
 
 				addresses_to_link = set(addresses_to_link_doc['addresses'])
 
+				if address in addresses_to_link:
+					addresses_to_link.remove(address)
+
+				if len(address_to_link) == 0:
+					continue
+
 				if first_insert:
-					if address in addresses_to_link:
-						addresses_to_link.remove(address)
-
-					if len(addresses_to_link) > 0:
-						address_mappings.insert_one({'address': address, 'linked_addresses': list(addresses_to_link)})
-						first_insert = False
-
+					address_mappings.insert_one({'address': address, 'linked_addresses': list(addresses_to_link)})
+					first_insert = False
 				else:
 					updated_addresses = { "$addToSet": { "linked_addresses": list(addresses_to_link) } }
 					address_mappings.update_one({'address': address}, updated_addresses)
